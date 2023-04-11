@@ -38,6 +38,7 @@ condition_variable data_available;
 static const unsigned NUM_PRODUCERS = 1;
 static const unsigned NUM_CONSUMERS = 10;
 
+static const unsigned SLEEP_TIME = 0; // ms
 
 //  =========================  Circular buffer  ============================================
 // Código que implementa um buffer circular
@@ -175,6 +176,42 @@ single_channel_image_t apply_box_blur(const single_channel_image_t &image, const
     return result;
 }
 
+
+// Producer
+void producer_func(const unsigned id)
+{
+	string i = "0";
+	while (true)		
+	{
+		// Cria um objeto do tipo unique_lock que no construtor chama m.lock()
+		std::unique_lock<std::mutex> lock(m);
+
+		// Verifica se o buffer está cheio e, caso afirmativo, espera notificação de "espaço disponível no buffer"
+		while (counter == BUFFER_SIZE)
+		{			
+			space_available.wait(lock); // Espera por espaço disponível 
+			// Lembre-se que a função wait() invoca m.unlock() antes de colocar a thread em estado de espera para que o consumidor consiga adquirir a posse do mutex m	e consumir dados
+			// Quando a thread é acordada, a função wait() invoca m.lock() retomando a posse do mutex m
+		}
+
+		// O buffer não está mais cheio, então produz um elemento
+		add_buffer(i);
+		std::cout << "Producer " << id << " - produced: " << i << " - Buffer counter: " << counter << std::endl;
+		
+		// Notifica o consumirod que existem dados a serem consumidos no buffer
+		data_available.notify_one();
+		
+		// (Opicional) dorme por SLEEP_TIME milissegundos
+		if (SLEEP_TIME > 0)
+			std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_TIME));
+
+		// Verifica a integridade do buffer, ou seja, verifica se o número de elementos do buffer (counter)
+		// é menor ou igual a BUFFER_SIZE
+		assert(counter <= BUFFER_SIZE);		
+	} // Fim de escopo -> o objeto lock será destruído e invocará m.unlock(), liberando o mutex m
+}
+
+
 int main(int argc, char *argv[])
 {
     if (!filesystem::exists(INPUT_DIRECTORY))
@@ -214,6 +251,6 @@ int main(int argc, char *argv[])
     }
     auto end_time = chrono::high_resolution_clock::now();
     auto elapsed_time = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
-    cout << "Elapsed time: " << elapsed_time.count() << " ms" << endl;
+    // cout << "Elapsed time: " << elapsed_time.count() << " ms" << endl;
     return 0;
 }
