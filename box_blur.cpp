@@ -177,10 +177,71 @@ single_channel_image_t apply_box_blur(const single_channel_image_t &image, const
 }
 
 
+class DirectoryDoesNotExist : public std::exception {
+	public:
+		const char* what() const throw() {
+			return "Error, directory does not exist";
+		}
+};
+class CreatingDirectoryError : public std::exception {
+	public:
+		const char* what() const throw() {
+			return "Error creating directory";
+		}
+};
+
+class SameNameError : public std::exception {
+	public:
+		const char* what() const throw() {
+			return "Error there is a file named, it should be a directory";
+		}
+};
+
+
 // Producer
 void producer_func(const unsigned id)
 {
-	string i = "0";
+	if (!filesystem::exists(INPUT_DIRECTORY))
+    {
+        throw DirectoryDoesNotExist();
+    }
+
+    if (!filesystem::exists(OUTPUT_DIRECTORY))
+    {
+        if (!filesystem::create_directory(OUTPUT_DIRECTORY))
+        {
+            throw CreatingDirectoryError();
+        }
+    }
+
+    if (!filesystem::is_directory(OUTPUT_DIRECTORY))
+    {
+        throw SameNameError();
+    }
+
+    auto start_time = chrono::high_resolution_clock::now();
+    for (auto &file : filesystem::directory_iterator{INPUT_DIRECTORY})
+    {
+        string input_image_path = file.path().string();
+        clog << "Processing image: " << input_image_path << endl;
+        image_t input_image = load_image(input_image_path);
+        image_t output_image;
+        for (int i = 0; i < NUM_CHANNELS; ++i)
+        {
+            output_image[i] = apply_box_blur(input_image[i], FILTER_SIZE);
+        }
+        string output_image_path = input_image_path.replace(input_image_path.find(INPUT_DIRECTORY), INPUT_DIRECTORY.length(), OUTPUT_DIRECTORY);
+        write_image(output_image_path, output_image);
+    }
+    auto end_time = chrono::high_resolution_clock::now();
+    auto elapsed_time = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
+    // cout << "Elapsed time: " << elapsed_time.count() << " ms" << endl;
+    
+    
+    
+    
+    
+    string i = "0";
 	while (true)		
 	{
 		// Cria um objeto do tipo unique_lock que no construtor chama m.lock()
@@ -214,43 +275,5 @@ void producer_func(const unsigned id)
 
 int main(int argc, char *argv[])
 {
-    if (!filesystem::exists(INPUT_DIRECTORY))
-    {
-        cerr << "Error, " << INPUT_DIRECTORY << " directory does not exist" << endl;
-        return 1;
-    }
-
-    if (!filesystem::exists(OUTPUT_DIRECTORY))
-    {
-        if (!filesystem::create_directory(OUTPUT_DIRECTORY))
-        {
-            cerr << "Error creating" << OUTPUT_DIRECTORY << " directory" << endl;
-            return 1;
-        }
-    }
-
-    if (!filesystem::is_directory(OUTPUT_DIRECTORY))
-    {
-        cerr << "Error there is a file named " << OUTPUT_DIRECTORY << ", it should be a directory" << endl;
-        return 1;
-    }
-
-    auto start_time = chrono::high_resolution_clock::now();
-    for (auto &file : filesystem::directory_iterator{INPUT_DIRECTORY})
-    {
-        string input_image_path = file.path().string();
-        clog << "Processing image: " << input_image_path << endl;
-        image_t input_image = load_image(input_image_path);
-        image_t output_image;
-        for (int i = 0; i < NUM_CHANNELS; ++i)
-        {
-            output_image[i] = apply_box_blur(input_image[i], FILTER_SIZE);
-        }
-        string output_image_path = input_image_path.replace(input_image_path.find(INPUT_DIRECTORY), INPUT_DIRECTORY.length(), OUTPUT_DIRECTORY);
-        write_image(output_image_path, output_image);
-    }
-    auto end_time = chrono::high_resolution_clock::now();
-    auto elapsed_time = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
-    // cout << "Elapsed time: " << elapsed_time.count() << " ms" << endl;
-    return 0;
+    
 }
