@@ -1,3 +1,5 @@
+#include <condition_variable>
+#include <mutex>
 #include <iostream>
 #include <vector>
 #include <string>
@@ -21,6 +23,46 @@ static const int NUM_CHANNELS = 3;
 // Image type definition
 typedef vector<vector<uint8_t>> single_channel_image_t;
 typedef array<single_channel_image_t, NUM_CHANNELS> image_t;
+
+// Mutex para proteger os recursos compartilhados
+mutex m;
+// Variável de condição que indica que existe espaço disponível no buffer
+// O consumidor utiliza essa variável de condição para notificar o produtor que a fila não está cheia
+condition_variable space_available;
+// Variável de condição que indica que existem dados disponíveis no buffer
+// O produtor utiliza essa variável de condição para notificar o consumidor que a fila não está vazia
+condition_variable data_available;
+
+
+// Numero de threads produtoras e consumidoras a serem criadas no main()
+static const unsigned NUM_PRODUCERS = 1;
+static const unsigned NUM_CONSUMERS = 10;
+
+
+//  =========================  Circular buffer  ============================================
+// Código que implementa um buffer circular
+static const unsigned BUFFER_SIZE = 1000;
+string buffer[BUFFER_SIZE];
+static unsigned counter = 0;
+unsigned in = 0, out = 0;
+
+void add_buffer(string i)
+{
+  buffer[in] = i;
+  in = (in+1) % BUFFER_SIZE;
+  counter++;
+}
+
+string get_buffer()
+{
+  string v;
+  v = buffer[out];
+  out = (out+1) % BUFFER_SIZE;
+  counter--;
+  return v;
+}
+//  ==========================================================================================
+
 
 image_t load_image(const string &filename)
 {
@@ -51,6 +93,7 @@ image_t load_image(const string &filename)
     stbi_image_free(data);
     return result;
 }
+
 
 void write_image(const string &filename, const image_t &image)
 {
