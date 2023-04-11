@@ -13,8 +13,8 @@
 using namespace std;
 
 // CONSTANTS
-static const string INPUT_DIRECTORY = "input";
-static const string OUTPUT_DIRECTORY = "output";
+static const string INPUT_DIRECTORY = "../input";
+static const string OUTPUT_DIRECTORY = "../output";
 static const int FILTER_SIZE = 5;
 static const int NUM_CHANNELS = 3;
 
