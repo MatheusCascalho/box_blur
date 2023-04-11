@@ -89,7 +89,45 @@ single_channel_image_t apply_box_blur(const single_channel_image_t &image, const
     // Calculate the padding size for the filter
     int pad = filter_size / 2;
 
-    // YOUR CODE HERE
+    
+    // Loop through the image pixels, skipping the border pixels
+    for(int row = pad; row < height - pad; row++){
+        for(int col = pad; col < width - pad; col++){
+            // Initialize the sum for the current pixel
+            float sum = 0
+
+            // Loop through the filter's rows and columns
+            for(int k_row = -pad; k_row < pad + 1; k_row++){
+                for(int k_col = -pad; k_col < pad + 1; k_col++){
+                    // Add the corresponding image pixel value to the sum
+                    sum = sum + image[row + k_row][col + k_col]
+                }
+            }
+
+            // Calculate the average value for the current pixel
+            float average = sum / (filter_size * filter_size)
+
+            // Assign the average value to the corresponding pixel in the result image
+            result[row][col] = average
+        }
+    }
+
+    // Copy the border pixels from the input image to the result image
+    for(int row=0; row<height; row++){
+        for(int col=0; col<pad; col++){
+            result[row][col] = image[row][col]
+            result[row][width - col - 1] = image[row][width - col - 1]
+        }
+    }
+
+    for(int col=0; col<width; col++){
+        for(int row=0; row<pad; row++){
+            result[row][col] = image[row][col]
+            result[height - row - 1][col] = image[height - row - 1][col]
+        }
+    }
+
+    
 
     return result;
 }
