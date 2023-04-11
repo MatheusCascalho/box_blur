@@ -62,6 +62,8 @@ string get_buffer()
   counter--;
   return v;
 }
+
+vector<string> processed_files;
 //  ==========================================================================================
 
 
@@ -220,22 +222,70 @@ void producer_func(const unsigned id)
     }
 
     auto start_time = chrono::high_resolution_clock::now();
+    int previousFileCount = 0;
     for (auto &file : filesystem::directory_iterator{INPUT_DIRECTORY})
     {
         string input_image_path = file.path().string();
-        clog << "Processing image: " << input_image_path << endl;
-        image_t input_image = load_image(input_image_path);
-        image_t output_image;
-        for (int i = 0; i < NUM_CHANNELS; ++i)
-        {
-            output_image[i] = apply_box_blur(input_image[i], FILTER_SIZE);
-        }
-        string output_image_path = input_image_path.replace(input_image_path.find(INPUT_DIRECTORY), INPUT_DIRECTORY.length(), OUTPUT_DIRECTORY);
-        write_image(output_image_path, output_image);
+        previousFileCount++;
+        // Cria um objeto do tipo unique_lock que no construtor chama m.lock()
+		std::unique_lock<std::mutex> lock(m);
+
+		// Verifica se o buffer está cheio e, caso afirmativo, espera notificação de "espaço disponível no buffer"
+		while (counter == BUFFER_SIZE)
+		{			
+			space_available.wait(lock); // Espera por espaço disponível 
+			// Lembre-se que a função wait() invoca m.unlock() antes de colocar a thread em estado de espera para que o consumidor consiga adquirir a posse do mutex m	e consumir dados
+			// Quando a thread é acordada, a função wait() invoca m.lock() retomando a posse do mutex m
+		}
+
+		// O buffer não está mais cheio, então produz um elemento
+		add_buffer(input_image_path);
+		std::cout << "Producer " << id << " - produced: " << input_image_path << " - Buffer counter: " << counter << std::endl;
+		
+		// Notifica o consumirod que existem dados a serem consumidos no buffer
+		data_available.notify_one();     
+
+        
+           
     }
-    auto end_time = chrono::high_resolution_clock::now();
-    auto elapsed_time = chrono::duration_cast<chrono::milliseconds>(end_time - start_time);
-    // cout << "Elapsed time: " << elapsed_time.count() << " ms" << endl;
+
+    while(true){
+        int currentFileCount = 0;
+
+        for (const auto& entry : std::filesystem::directory_iterator(INPUT_DIRECTORY))
+        {
+            if (entry.is_regular_file())
+            {
+                currentFileCount++;
+            }
+        }
+
+        if (currentFileCount > previousFileCount)
+        {
+            std::cout << "New file added: " << std::filesystem::directory_entry(INPUT_DIRECTORY).path().filename() << std::endl;
+            previousFileCount = currentFileCount;
+
+            std::unique_lock<std::mutex> lock(m);
+
+            // Verifica se o buffer está cheio e, caso afirmativo, espera notificação de "espaço disponível no buffer"
+            while (counter == BUFFER_SIZE)
+            {			
+                space_available.wait(lock); // Espera por espaço disponível 
+                // Lembre-se que a função wait() invoca m.unlock() antes de colocar a thread em estado de espera para que o consumidor consiga adquirir a posse do mutex m	e consumir dados
+                // Quando a thread é acordada, a função wait() invoca m.lock() retomando a posse do mutex m
+            }
+            string input_image_path = file.path().string();
+
+            // O buffer não está mais cheio, então produz um elemento
+            add_buffer(input_image_path);
+            std::cout << "Producer " << id << " - produced: " << input_image_path << " - Buffer counter: " << counter << std::endl;
+            
+            // Notifica o consumirod que existem dados a serem consumidos no buffer
+            data_available.notify_one(); 
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    }
     
     
     
