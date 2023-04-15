@@ -336,3 +336,8 @@ ASALocalRun/
 #Build directory
 build/
 build/*
+
+
+output/
+
+.vscode/
