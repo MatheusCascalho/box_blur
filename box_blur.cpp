@@ -245,85 +245,66 @@ void producer_func(const unsigned id)
 		// Notifica o consumirod que existem dados a serem consumidos no buffer
 		data_available.notify_one();     
 
-        
-           
-    }
-
-    while(true){
-        int currentFileCount = 0;
-
-        for (const auto& entry : std::filesystem::directory_iterator(INPUT_DIRECTORY))
-        {
-            if (entry.is_regular_file())
-            {
-                currentFileCount++;
-            }
-        }
-
-        if (currentFileCount > previousFileCount)
-        {
-            std::cout << "New file added: " << std::filesystem::directory_entry(INPUT_DIRECTORY).path().filename() << std::endl;
-            previousFileCount = currentFileCount;
-
-            std::unique_lock<std::mutex> lock(m);
-
-            // Verifica se o buffer está cheio e, caso afirmativo, espera notificação de "espaço disponível no buffer"
-            while (counter == BUFFER_SIZE)
-            {			
-                space_available.wait(lock); // Espera por espaço disponível 
-                // Lembre-se que a função wait() invoca m.unlock() antes de colocar a thread em estado de espera para que o consumidor consiga adquirir a posse do mutex m	e consumir dados
-                // Quando a thread é acordada, a função wait() invoca m.lock() retomando a posse do mutex m
-            }
-            string input_image_path = file.path().string();
-
-            // O buffer não está mais cheio, então produz um elemento
-            add_buffer(input_image_path);
-            std::cout << "Producer " << id << " - produced: " << input_image_path << " - Buffer counter: " << counter << std::endl;
-            
-            // Notifica o consumirod que existem dados a serem consumidos no buffer
-            data_available.notify_one(); 
-        }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    }
-    
-    
-    
-    
-    
-    string i = "0";
-	while (true)		
-	{
-		// Cria um objeto do tipo unique_lock que no construtor chama m.lock()
-		std::unique_lock<std::mutex> lock(m);
-
-		// Verifica se o buffer está cheio e, caso afirmativo, espera notificação de "espaço disponível no buffer"
-		while (counter == BUFFER_SIZE)
-		{			
-			space_available.wait(lock); // Espera por espaço disponível 
-			// Lembre-se que a função wait() invoca m.unlock() antes de colocar a thread em estado de espera para que o consumidor consiga adquirir a posse do mutex m	e consumir dados
-			// Quando a thread é acordada, a função wait() invoca m.lock() retomando a posse do mutex m
-		}
-
-		// O buffer não está mais cheio, então produz um elemento
-		add_buffer(i);
-		std::cout << "Producer " << id << " - produced: " << i << " - Buffer counter: " << counter << std::endl;
-		
-		// Notifica o consumirod que existem dados a serem consumidos no buffer
-		data_available.notify_one();
-		
-		// (Opicional) dorme por SLEEP_TIME milissegundos
+        // (Opicional) dorme por SLEEP_TIME milissegundos
 		if (SLEEP_TIME > 0)
 			std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_TIME));
 
-		// Verifica a integridade do buffer, ou seja, verifica se o número de elementos do buffer (counter)
-		// é menor ou igual a BUFFER_SIZE
-		assert(counter <= BUFFER_SIZE);		
-	} // Fim de escopo -> o objeto lock será destruído e invocará m.unlock(), liberando o mutex m
+           
+    }
+
 }
+
+// Consumer
+void consumer_func(const unsigned id)
+{
+	while (true)
+	{
+		// Cria um objeto do tipo unique_lock que no construtor chama m.lock()
+		std::unique_lock<std::mutex> lock(m);
+		
+		// Verifica se o buffer está vazio e, caso afirmativo, espera notificação de "dado disponível no buffer"
+		while (counter == 0)
+		{
+			data_available.wait(lock); // Espera por dado disponível
+			// Lembre-se que a função wait() invoca m.unlock() antes de colocar a thread em estado de espera para que o produtor consiga adquirir a posse do mutex m e produzir dados
+			// Quando a thread é acordada, a função wait() invoca m.lock() retomando a posse do mutex m
+		}
+
+		// O buffer não está mais vazio, então consome um elemento
+		string image_name = get_buffer();
+        std::cout << "Consumer " << id << " - consumed: " << image_name << " - Buffer counter: " << counter << std::endl;
+
+        space_available.notify_one();
+
+        image_t input_image = load_image(image_name);
+        image_t output_image;
+        for (int i = 0; i < NUM_CHANNELS; ++i)
+        {
+            output_image[i] = apply_box_blur(input_image[i], FILTER_SIZE);
+        }
+        string output_image_path = image_name.replace(image_name.find(INPUT_DIRECTORY), INPUT_DIRECTORY.length(), OUTPUT_DIRECTORY);
+        write_image(output_image_path, output_image);
+    }
+}
+		
+
 
 
 int main(int argc, char *argv[])
 {
+    // Cria NUM_PRODUCER thread produtoras  e NUM_CONSUMER threads consumidoras
+	std::vector<std::thread> producers;
+	std::vector<std::thread> consumers;
+
+	for (unsigned i =0; i < NUM_PRODUCERS; ++i)
+	{
+		producers.push_back(std::thread(producer_func, i));
+	}
+	for (unsigned i =0; i < NUM_CONSUMERS; ++i)
+	{
+		consumers.push_back(std::thread(consumer_func, i));
+	}
+
+	consumers[0].join();
     
 }
